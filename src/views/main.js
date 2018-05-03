@@ -11,15 +11,44 @@ window.onload = function() {
       lineNumbers: true,
       lineWrapping: true,
     })
-    req_response('GET', '', function(res, data) {
+    var viewer = document.getElementById("viewer")
+    req_response('GET', '/', '', function(res, data) {
         editor.getDoc().setValue(data)
+        viewer.innerHTML = data
     })
+
+    var current_highlight;
+    viewer.onclick = function(evt) {
+        if (current_highlight !== undefined)
+            current_highlight.classList.remove("highlight")
+        // find the click target
+        var target = evt.target
+        while (!target.id.match(/n-\d+/)) {
+            target = target.parentNode
+            if (target === viewer)
+                return
+        }
+        var id = target.id.substring(2, target.id.length)
+        current_highlight = target
+        // now style it
+        current_highlight.classList.add("highlight")
+        req_response('GET', `/dump/${id}`, '', function(res, data) {
+            editor.getDoc().setValue(data)
+        })
+        while (target !== viewer) {
+            if (target.id.match(/n-\d+/)) {
+                console.log(target.classList[0]);
+            }
+            target = target.parentNode
+        }
+    }
 }
 
-function req_response(method, data, cb, errcb) {
+function req_response(method, path, data, cb, errcb) {
     var options = {
         protocol: "http:",
         socketPath: server,
+        path: path,
         method: method,
         headers: {
             'Content-Type': 'text/plain',

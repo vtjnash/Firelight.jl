@@ -4,6 +4,7 @@ module Firelight
 using Electron
 import HTTP
 import JSON
+# import FunctionalCollections
 
 application() = Electron.default_application()
 #let app
@@ -15,12 +16,34 @@ application() = Electron.default_application()
 #    end
 #end
 
+function escapehtml(io::IO, bytes::AbstractVector{UInt8}, attribute::Bool=true)
+    for b in bytes
+        if b == UInt8('&')
+            write(io, "&amp;")
+        elseif b == UInt8('<')
+            write(io, "&lt;")
+        elseif b == UInt8('>')
+            write(io, "&gt;")
+        elseif attribute && b == UInt8('\'')
+            write(io, "&#39;")
+        elseif attribute && b == UInt8('"')
+            write(io, "&quot;")
+        else
+            write(io, b)
+        end
+    end
+end
+
+Base.position(io::IOContext) = position(io.io)
+
+
 mutable struct ServerState
     key::UInt64
     content::String
+    shadowdom::Vector{Node}
     exists::Bool
     function ServerState(key::UInt64)
-        state = new(key, "", true)
+        state = new(key, "", Vector{Node}(), true)
         sessions[key] = state
         return state
     end
@@ -50,15 +73,23 @@ function start_server()
     return server_name
 end
 
-function start_session(server_name::String)
-    app = application()
+function invokelatest(f, args...)
+    return eval(Expr(:body, Expr(:return, Expr(:call, Core._apply, QuoteNode(f), QuoteNode(args)))))
+end
+
+function start_session()
     key = rand(UInt64)
     while haskey(sessions, key)
         key += 1
     end
-    keystr = hex(key, 16)
     session = ServerState(key)
-    session.content = "Hello World!"
+    return session
+end
+
+function start_session(server_name::String)
+    app = application()
+    session = start_session()
+    keystr = hex(session.key, 16)
     w = Window(app, @LOCAL("views/main.html?session-id=$keystr&server=$(HTTP.escapeuri(server_name))"))
     return session
 end
@@ -71,7 +102,24 @@ end
 
 function render(req::HTTP.Request, session::ServerState)
     rep = req.response
-    rep.body = session.content
+    HTTP.setheader(rep, "Content-Type" => "text/plain;charset=utf-8")
+    target = req.target
+    if target == "/"
+        rep.body = session.content
+    elseif target == "/fork"
+        session = start_session()
+        keystr = hex(session.key, 16)
+        rep.body = keystr
+    elseif ismatch(r"/dump/(\d+)", target)
+        id = tryparse(Int, match(r"/dump/(\d+)", target)[1])
+        id = isnull(id) ? nothing : get(id)
+        if id === nothing || id < 1 || id > length(session.shadowdom)
+            return HTTP.Response(404, "Id not found in shadowdom")
+        end
+        rep.body = sprint(dump, session.shadowdom[id].object)
+    else
+        return HTTP.Response(404)
+    end
     return rep
 end
 

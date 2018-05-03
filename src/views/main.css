@@ -1,0 +1,12 @@
+textarea.CodeMirror {
+  width: 100%;
+  resize: none;
+}
+
+.CodeInfo > .code > span {
+    display: block;
+}
+
+.highlight {
+    font-weight: bold;
+}
