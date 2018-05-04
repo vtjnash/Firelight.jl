@@ -36,6 +36,7 @@ end
 
 Base.position(io::IOContext) = position(io.io)
 
+include("dom.jl")
 
 mutable struct ServerState
     key::UInt64

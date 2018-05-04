@@ -21,12 +21,13 @@ window.onload = function() {
     viewer.onclick = function(evt) {
         if (current_highlight !== undefined)
             current_highlight.classList.remove("highlight")
+        current_highlight = undefined
         // find the click target
         var target = evt.target
-        while (!target.id.match(/n-\d+/)) {
-            target = target.parentNode
+        while (target.id === undefined || !target.id.match(/n-\d+/)) {
             if (target === viewer)
                 return
+            target = target.parentNode
         }
         var id = target.id.substring(2, target.id.length)
         current_highlight = target
@@ -35,12 +36,14 @@ window.onload = function() {
         req_response('GET', `/dump/${id}`, '', function(res, data) {
             editor.getDoc().setValue(data)
         })
+        var parents = []
         while (target !== viewer) {
-            if (target.id.match(/n-\d+/)) {
-                console.log(target.classList[0]);
+            if (target.id !== undefined && target.id.match(/n-\d+/)) {
+                parents.push(target.classList[0])
             }
             target = target.parentNode
         }
+        console.log(parents)
     }
 }
 

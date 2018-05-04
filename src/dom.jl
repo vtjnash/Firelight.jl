@@ -19,9 +19,8 @@ function endNode(shadowdom::Vector{Node}, io::IO, id::Int)
     endof = position(io)
     for i in id:length(shadowdom)
         n = shadowdom[i]
-        if n.endof == -1
-            n.endof = endof
-        end
+        n.endof == -1 || return
+        n.endof = endof
     end
 end
 
@@ -35,7 +34,7 @@ end
 function richprint(o::ANY)
     dom = Vector{Node}()
     io = IOBuffer()
-    richprint(io, dom, o)
+    richprint(convert(IOContext, io), dom, o)
     out = take!(io)
     io = IOBuffer()
     prevstart = 0
