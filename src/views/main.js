@@ -13,7 +13,6 @@ window.onload = function() {
     })
     var viewer = document.getElementById("viewer")
     req_response('GET', '/', '', function(res, data) {
-        editor.getDoc().setValue(data)
         viewer.innerHTML = data
     })
 

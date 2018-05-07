@@ -35,14 +35,17 @@ function richprint(o::ANY)
     dom = Vector{Node}()
     io = IOBuffer()
     richprint(convert(IOContext, io), dom, o)
-    out = take!(io)
+    return annotate!(take!(io), dom)
+end
+
+function annotate!(out::AbstractVector{UInt8}, dom::Vector{Node})
     io = IOBuffer()
     prevstart = 0
     stack = []
     push!(dom, DELETED)
     for (id, node) in enumerate(dom)
         next = node.start
-        while !isempty(stack) && (stack[end].endof < next || id == length(dom))
+        while !isempty(stack) && (stack[end].endof <= next || id == length(dom))
             let next = pop!(stack).endof
                 escapehtml(io, view(out, (prevstart + 1):next), false)
                 print(io, "</span>")
@@ -66,3 +69,4 @@ function richprint(o::ANY)
 end
 
 include("richprint.jl")
+include("richprofile.jl")

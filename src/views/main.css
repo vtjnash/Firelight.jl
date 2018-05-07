@@ -3,10 +3,30 @@ textarea.CodeMirror {
   resize: none;
 }
 
-.CodeInfo > .code > span {
+div.CodeDisplay {
+  height: 500px;
+  overflow: scroll;
+  white-space: nowrap;
+}
+
+span.highlight {
+    font-weight: bold;
+}
+
+span.CodeInfo,
+span.CodeInfo > span.code,
+span.CodeInfo > span.code > span,
+span.ProfileTree,
+span.ProfileTree span.level,
+span.ProfileTree span.frame,
+span.ProfileTree span.frame-c {
     display: block;
 }
 
-.highlight {
-    font-weight: bold;
+span.ProfileTree span.level {
+    margin-left: 8px;
+}
+
+span.ProfileTree span.frame-c {
+    color: aaaaaa;
 }
