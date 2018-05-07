@@ -28,6 +28,7 @@ window.onload = function() {
                 return
             target = target.parentNode
         }
+        editor.getDoc().setValue("")
         var id = target.id.substring(2, target.id.length)
         current_highlight = target
         // now style it

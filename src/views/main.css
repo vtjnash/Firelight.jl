@@ -23,6 +23,10 @@ span.ProfileTree span.frame-c {
     display: block;
 }
 
+span.CodeInfo > .ExprNode {
+    white-space: pre;
+}
+
 span.ProfileTree span.level {
     margin-left: 8px;
 }

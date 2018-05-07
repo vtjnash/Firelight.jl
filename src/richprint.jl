@@ -110,7 +110,7 @@ function richprint(io::IO, dom::Vector{Node}, l::Core.MethodInstance)
                 print(io, "(@generated thunk)")
                 richprint(io, dom, l.def)
             else
-                show_tuple_as_call(io, dom, id, l.def.name, l.specTypes)
+                richprint_tuple_as_call(io, dom, id, l.def.name, l.specTypes)
             end
         else
             print(io, "(Toplevel thunk)")
@@ -217,10 +217,12 @@ end
 
 const ExprNode = Base.ExprNode
 
-#show(io::IO, ex::ExprNode)             = show_unquoted_quote_expr(io, ex, 0, -1)
-#show_unquoted(io::IO, ex)              = show_unquoted(io, ex, 0, 0)
-#show_unquoted(io::IO, ex, indent::Int) = show_unquoted(io, ex, indent, 0)
-#show_unquoted(io::IO, ex, ::Int,::Int) = show(io, ex)
+richprint(io::IO, dom::Vector{Node}, ex::ExprNode) =
+    let id = startNode(dom, io, ex, "ExprNode")
+        richprint_unquoted_quote_expr(io, dom, ex, 0, -1)
+        endNode(dom, io, id)
+    end
+richprint_unquoted(io::IO, dom::Vector{Node}, ex, ::Int=0, ::Int=0) = richprint(io, dom, ex)
 
 ## AST printing constants ##
 
@@ -238,8 +240,7 @@ import Base:
 
 ## AST printing helpers ##
 
-typeemphasize(io::IO) = get(io, :TYPEEMPHASIZE, false) === true
-
+import Base: show_expr_type, emphasize, typeemphasize
 #function show_expr_type(io::IO, ty::ANY, emph::Bool)
 #    if ty === Function
 #        print(io, "::F")
@@ -254,520 +255,546 @@ typeemphasize(io::IO) = get(io, :TYPEEMPHASIZE, false) === true
 #    end
 #end
 
-emphasize(io, str::AbstractString) = print(io, uppercase(str))
+import Base: show_linenumber
 
-show_linenumber(io::IO, line)       = print(io, " # line ", line, ':')
-show_linenumber(io::IO, line, file) = print(io, " # ", file, ", line ", line, ':')
+# show a block, e g if/for/etc
+function richprint_block(io::IO, dom::Vector{Node}, head, args::Vector, body, indent::Int)
+    print(io, head, ' ')
+    richprint_list(io, dom, args, ", ", indent)
 
-## show a block, e g if/for/etc
-#function show_block(io::IO, head, args::Vector, body, indent::Int)
-#    print(io, head, ' ')
-#    show_list(io, args, ", ", indent)
-#
-#    ind = head === :module || head === :baremodule ? indent : indent + indent_width
-#    exs = (is_expr(body, :block) || is_expr(body, :body)) ? body.args : Any[body]
-#    for ex in exs
-#        if !is_linenumber(ex); print(io, '\n', " "^ind); end
-#        show_unquoted(io, ex, ind, -1)
-#    end
-#    print(io, '\n', " "^indent)
-#end
-#show_block(io::IO,head,    block,i::Int) = show_block(io,head, [], block,i)
-#function show_block(io::IO, head, arg, block, i::Int)
-#    if is_expr(arg, :block)
-#        show_block(io, head, arg.args, block, i)
-#    else
-#        show_block(io, head, Any[arg], block, i)
-#    end
-#end
-#
-## show an indented list
-#function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operators::Bool=false)
-#    n = length(items)
-#    if n == 0; return end
-#    indent += indent_width
-#    first = true
-#    for item in items
-#        !first && print(io, sep)
-#        parens = enclose_operators && isa(item,Symbol) && isoperator(item)
-#        parens && print(io, '(')
-#        show_unquoted(io, item, indent, prec)
-#        parens && print(io, ')')
-#        first = false
-#    end
-#end
-## show an indented list inside the parens (op, cl)
-#function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, encl_ops=false)
-#    print(io, op)
-#    show_list(io, items, sep, indent, prec, encl_ops)
-#    print(io, cl)
-#end
-#
-## show a normal (non-operator) function call, e.g. f(x, y) or A[z]
-#function show_call(io::IO, head, func, func_args, indent)
-#    op, cl = expr_calls[head]
-#    if isa(func, Symbol) || (isa(func, Expr) &&
-#            (func.head == :. || func.head == :curly))
-#        show_unquoted(io, func, indent)
-#    else
-#        print(io, '(')
-#        show_unquoted(io, func, indent)
-#        print(io, ')')
-#    end
-#    if head == :(.)
-#        print(io, '.')
-#    end
-#    if !isempty(func_args) && isa(func_args[1], Expr) && func_args[1].head === :parameters
-#        print(io, op)
-#        show_list(io, func_args[2:end], ", ", indent)
-#        print(io, "; ")
-#        show_list(io, func_args[1].args, ", ", indent)
-#        print(io, cl)
-#    else
-#        show_enclosed_list(io, op, func_args, ", ", cl, indent)
-#    end
-#end
-#
+    ind = head === :module || head === :baremodule ? indent : indent + indent_width
+    exs = (is_expr(body, :block) || is_expr(body, :body)) ? body.args : Any[body]
+    for ex in exs
+        if !is_linenumber(ex)
+            print(io, '\n', " "^ind)
+        end
+        richprint_unquoted(io, dom, ex, ind, -1)
+    end
+    print(io, '\n', " "^indent)
+end
+richprint_block(io::IO, dom::Vector{Node}, head, block, i::Int) = richprint_block(io, dom, head, [], block, i)
+function richprint_block(io::IO, dom::Vector{Node}, head, arg, block, i::Int)
+    if is_expr(arg, :block)
+        richprint_block(io, dom, head, arg.args, block, i)
+    else
+        richprint_block(io, dom, head, Any[arg], block, i)
+    end
+end
+
+# show an indented list
+function richprint_list(io::IO, dom::Vector{Node}, items, sep, indent::Int, prec::Int=0, enclose_operators::Bool=false)
+    n = length(items)
+    if n == 0; return end
+    indent += indent_width
+    first = true
+    for item in items
+        !first && print(io, sep)
+        parens = enclose_operators && isa(item,Symbol) && isoperator(item)
+        parens && print(io, '(')
+        richprint_unquoted(io, dom, item, indent, prec)
+        parens && print(io, ')')
+        first = false
+    end
+end
+# show an indented list inside the parens (op, cl)
+function richprint_enclosed_list(io::IO, dom::Vector{Node}, op, items, sep, cl, indent, prec=0, encl_ops=false)
+    print(io, op)
+    richprint_list(io, dom, items, sep, indent, prec, encl_ops)
+    print(io, cl)
+end
+
+# show a normal (non-operator) function call, e.g. f(x, y) or A[z]
+function richprint_call(io::IO, dom::Vector{Node}, head, func, func_args, indent)
+    op, cl = expr_calls[head]
+    if isa(func, Symbol) || (isa(func, Expr) &&
+            (func.head == :. || func.head == :curly))
+        richprint_unquoted(io, dom, func, indent)
+    else
+        print(io, '(')
+        richprint_unquoted(io, dom, func, indent)
+        print(io, ')')
+    end
+    if head == :(.)
+        print(io, '.')
+    end
+    if !isempty(func_args) && isa(func_args[1], Expr) && func_args[1].head === :parameters
+        print(io, op)
+        richprint_list(io, dom, func_args[2:end], ", ", indent)
+        print(io, "; ")
+        richprint_list(io, dom, func_args[1].args, ", ", indent)
+        print(io, cl)
+    else
+        richprint_enclosed_list(io, dom, op, func_args, ", ", cl, indent)
+    end
+end
+
 ### AST printing ##
-#
-#show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = print(io, sym)
-#show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line)
-#show_unquoted(io::IO, ex::LabelNode, ::Int, ::Int)      = print(io, ex.label, ": ")
-#show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto ", ex.label)
-#show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = print(io, ex.mod, '.', ex.name)
-#
-#function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
-#    typ = isa(ex,TypedSlot) ? ex.typ : Any
-#    slotid = ex.id
-#    src = get(io, :SOURCEINFO, false)
-#    if isa(src, CodeInfo)
-#        slottypes = (src::CodeInfo).slottypes
-#        if isa(slottypes, Array) && slotid <= length(slottypes::Array)
-#            slottype = slottypes[slotid]
-#            # The Slot in assignment can somehow have an Any type
-#            if isa(slottype, Type) && isa(typ, Type) && slottype <: typ
-#                typ = slottype
-#            end
-#        end
-#    end
-#    slotnames = get(io, :SOURCE_SLOTNAMES, false)
-#    if (isa(slotnames, Vector{String}) &&
-#        slotid <= length(slotnames::Vector{String}))
-#        print(io, (slotnames::Vector{String})[slotid])
-#    else
-#        print(io, "_", slotid)
-#    end
-#    emphstate = typeemphasize(io)
-#    if emphstate || (typ !== Any && isa(ex,TypedSlot))
-#        show_expr_type(io, typ, emphstate)
-#    end
-#end
-#
-#function show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int)
-#    if isa(ex.value, Symbol)
-#        show_unquoted_quote_expr(io, ex.value, indent, prec)
-#    else
-#        print(io, "\$(QuoteNode(")
-#        show(io, ex.value)
-#        print(io, "))")
-#    end
-#end
-#
-#function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
-#    if isa(value, Symbol) && !(value in quoted_syms)
-#        s = string(value)
-#        if isidentifier(s) || isoperator(value)
-#            print(io, ":")
-#            print(io, value)
-#        else
-#            print(io, "Symbol(\"", escape_string(s), "\")")
-#        end
-#    else
-#        if isa(value,Expr) && value.head === :block
-#            show_block(io, "quote", value, indent)
-#            print(io, "end")
-#        else
-#            print(io, ":(")
-#            show_unquoted(io, value, indent+indent_width, -1)
-#            print(io, ")")
-#        end
-#    end
-#end
-#
-#function show_generator(io, ex, indent)
-#    if ex.head === :flatten
-#        fg = ex
-#        ranges = Any[]
-#        while isa(fg, Expr) && fg.head === :flatten
-#            push!(ranges, fg.args[1].args[2:end])
-#            fg = fg.args[1].args[1]
-#        end
-#        push!(ranges, fg.args[2:end])
-#        show_unquoted(io, fg.args[1], indent)
-#        for r in ranges
-#            print(io, " for ")
-#            show_list(io, r, ", ", indent)
-#        end
-#    else
-#        show_unquoted(io, ex.args[1], indent)
-#        print(io, " for ")
-#        show_list(io, ex.args[2:end], ", ", indent)
-#    end
-#end
-#
-## TODO: implement interpolated strings
-#function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
-#    head, args, nargs = ex.head, ex.args, length(ex.args)
-#    emphstate = typeemphasize(io)
-#    show_type = true
-#    if (ex.head == :(=) || ex.head == :line ||
-#        ex.head == :boundscheck ||
-#        ex.head == :gotoifnot ||
-#        ex.head == :return)
-#        show_type = false
-#    end
-#    if !emphstate && ex.typ === Any
-#        show_type = false
-#    end
-#    # dot (i.e. "x.y"), but not compact broadcast exps
-#    if head === :(.) && !is_expr(args[2], :tuple)
-#        show_unquoted(io, args[1], indent + indent_width)
-#        print(io, '.')
-#        if is_quoted(args[2])
-#            show_unquoted(io, unquoted(args[2]), indent + indent_width)
-#        else
-#            print(io, '(')
-#            show_unquoted(io, args[2], indent + indent_width)
-#            print(io, ')')
-#        end
-#
-#    # infix (i.e. "x <: y" or "x = y")
-#    elseif (head in expr_infix_any && nargs==2) || (head === :(:) && nargs==3)
-#        func_prec = operator_precedence(head)
-#        head_ = head in expr_infix_wide ? " $head " : head
-#        if func_prec <= prec
-#            show_enclosed_list(io, '(', args, head_, ')', indent, func_prec, true)
-#        else
-#            show_list(io, args, head_, indent, func_prec, true)
-#        end
-#
-#    # list (i.e. "(1, 2, 3)" or "[1, 2, 3]")
-#    elseif haskey(expr_parens, head)               # :tuple/:vcat
-#        op, cl = expr_parens[head]
-#        if head === :vcat
-#            sep = "; "
-#        elseif head === :hcat || head === :row
-#            sep = " "
-#        else
-#            sep = ", "
-#        end
-#        head !== :row && print(io, op)
-#        show_list(io, args, sep, indent)
-#        if nargs == 1
-#            if head === :tuple
-#                print(io, ',')
-#            elseif head === :vcat
-#                print(io, ';')
-#            end
-#        end
-#        head !== :row && print(io, cl)
-#
-#    # function call
-#    elseif head === :call && nargs >= 1
-#        func = args[1]
-#        fname = isa(func,GlobalRef) ? func.name : func
-#        func_prec = operator_precedence(fname)
-#        if func_prec > 0 || fname in uni_ops
-#            func = fname
-#        end
-#        func_args = args[2:end]
-#
-#        if (in(ex.args[1], (GlobalRef(Base, :bitcast), :throw)) ||
-#            ismodulecall(ex))
-#            show_type = false
-#        end
-#        if show_type
-#            prec = prec_decl
-#        end
-#
-#        # scalar multiplication (i.e. "100x")
-#        if (func === :* &&
-#            length(func_args)==2 && isa(func_args[1], Real) && isa(func_args[2], Symbol))
-#            if func_prec <= prec
-#                show_enclosed_list(io, '(', func_args, "", ')', indent, func_prec)
-#            else
-#                show_list(io, func_args, "", indent, func_prec)
-#            end
-#
-#        # unary operator (i.e. "!z")
-#        elseif isa(func,Symbol) && func in uni_ops && length(func_args) == 1
-#            show_unquoted(io, func, indent)
-#            if isa(func_args[1], Expr) || func_args[1] in all_ops
-#                show_enclosed_list(io, '(', func_args, ", ", ')', indent, func_prec)
-#            else
-#                show_unquoted(io, func_args[1])
-#            end
-#
-#        # binary operator (i.e. "x + y")
-#        elseif func_prec > 0 # is a binary operator
-#            na = length(func_args)
-#            if (na == 2 || (na > 2 && func in (:+, :++, :*))) &&
-#                    all(!isa(a, Expr) || a.head !== :... for a in func_args)
-#                sep = " $func "
-#                if func_prec <= prec
-#                    show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true)
-#                else
-#                    show_list(io, func_args, sep, indent, func_prec, true)
-#                end
-#            elseif na == 1
-#                # 1-argument call to normally-binary operator
-#                op, cl = expr_calls[head]
-#                print(io, "(")
-#                show_unquoted(io, func, indent)
-#                print(io, ")")
-#                show_enclosed_list(io, op, func_args, ", ", cl, indent)
-#            else
-#                show_call(io, head, func, func_args, indent)
-#            end
-#
-#        # normal function (i.e. "f(x,y)")
-#        else
-#            show_call(io, head, func, func_args, indent)
-#        end
-#
-#    # other call-like expressions ("A[1,2]", "T{X,Y}", "f.(X,Y)")
-#    elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)
-#        funcargslike = head == :(.) ? ex.args[2].args : ex.args[2:end]
-#        show_call(io, head, ex.args[1], funcargslike, indent)
-#
-#    # comprehensions
-#    elseif head === :typed_comprehension && length(args) == 2
-#        show_unquoted(io, args[1], indent)
-#        print(io, '[')
-#        show_generator(io, args[2], indent)
-#        print(io, ']')
-#
-#    elseif head === :comprehension && length(args) == 1
-#        print(io, '[')
-#        show_generator(io, args[1], indent)
-#        print(io, ']')
-#
-#    elseif (head === :generator && length(args) >= 2) || (head === :flatten && length(args) == 1)
-#        print(io, '(')
-#        show_generator(io, ex, indent)
-#        print(io, ')')
-#
-#    elseif head === :filter && length(args) == 2
-#        show_unquoted(io, args[2], indent)
-#        print(io, " if ")
-#        show_unquoted(io, args[1], indent)
-#
-#    # comparison (i.e. "x < y < z")
-#    elseif head === :comparison && nargs >= 3 && (nargs&1==1)
-#        comp_prec = minimum(operator_precedence, args[2:2:end])
-#        if comp_prec <= prec
-#            show_enclosed_list(io, '(', args, " ", ')', indent, comp_prec)
-#        else
-#            show_list(io, args, " ", indent, comp_prec)
-#        end
-#
-#    # function calls need to transform the function from :call to :calldecl
-#    # so that operators are printed correctly
-#    elseif head === :function && nargs==2 && is_expr(args[1], :call)
-#        show_block(io, head, Expr(:calldecl, args[1].args...), args[2], indent)
-#        print(io, "end")
-#
-#    elseif head === :function && nargs == 1
-#        print(io, "function ", args[1], " end")
-#
-#    # block with argument
-#    elseif head in (:for,:while,:function,:if) && nargs==2
-#        show_block(io, head, args[1], args[2], indent)
-#        print(io, "end")
-#
-#    elseif head === :module && nargs==3 && isa(args[1],Bool)
-#        show_block(io, args[1] ? :module : :baremodule, args[2], args[3], indent)
-#        print(io, "end")
-#
-#    # type declaration
-#    elseif head === :type && nargs==3
-#        show_block(io, args[1] ? Symbol("mutable struct") : Symbol("struct"), args[2], args[3], indent)
-#        print(io, "end")
-#
-#    elseif head === :bitstype && nargs == 2
-#        print(io, "primitive type ")
-#        show_list(io, reverse(args), ' ', indent)
-#        print(io, " end")
-#
-#    elseif head === :abstract && nargs == 1
-#        print(io, "abstract type ")
-#        show_list(io, args, ' ', indent)
-#        print(io, " end")
-#
-#    # empty return (i.e. "function f() return end")
-#    elseif head === :return && nargs == 1 && args[1] === nothing
-#        print(io, head)
-#
-#    # type annotation (i.e. "::Int")
-#    elseif head === Symbol("::") && nargs == 1
-#        print(io, "::")
-#        show_unquoted(io, args[1], indent)
-#
-#    # var-arg declaration or expansion
-#    # (i.e. "function f(L...) end" or "f(B...)")
-#    elseif head === :(...) && nargs == 1
-#        show_unquoted(io, args[1], indent)
-#        print(io, "...")
-#
-#    elseif (nargs == 0 && head in (:break, :continue))
-#        print(io, head)
-#
-#    elseif (nargs == 1 && head in (:return, :const)) ||
-#                          head in (:local,  :global, :export)
-#        print(io, head, ' ')
-#        show_list(io, args, ", ", indent)
-#
-#    elseif head === :macrocall && nargs >= 1
-#        # Use the functional syntax unless specifically designated with prec=-1
-#        if prec >= 0
-#            show_call(io, :call, ex.args[1], ex.args[2:end], indent)
-#        else
-#            show_list(io, args, ' ', indent)
-#        end
-#
-#    elseif head === :line && 1 <= nargs <= 2
-#        show_linenumber(io, args...)
-#
-#    elseif head === :if && nargs == 3     # if/else
-#        show_block(io, "if",   args[1], args[2], indent)
-#        show_block(io, "else", args[3], indent)
-#        print(io, "end")
-#
-#    elseif head === :try && 3 <= nargs <= 4
-#        show_block(io, "try", args[1], indent)
-#        if is_expr(args[3], :block)
-#            show_block(io, "catch", args[2] === false ? Any[] : args[2], args[3], indent)
-#        end
-#        if nargs >= 4 && is_expr(args[4], :block)
-#            show_block(io, "finally", Any[], args[4], indent)
-#        end
-#        print(io, "end")
-#
-#    elseif head === :let && nargs >= 1
-#        show_block(io, "let", args[2:end], args[1], indent); print(io, "end")
-#
-#    elseif head === :block || head === :body
-#        show_block(io, "begin", ex, indent); print(io, "end")
-#
-#    elseif head === :quote && nargs == 1 && isa(args[1],Symbol)
-#        show_unquoted_quote_expr(io, args[1], indent, 0)
-#
-#    elseif head === :gotoifnot && nargs == 2
-#        print(io, "unless ")
-#        show_list(io, args, " goto ", indent)
-#
-#    elseif head === :string && nargs == 1 && isa(args[1], AbstractString)
-#        show(io, args[1])
-#
-#    elseif head === :null
-#        print(io, "nothing")
-#
-#    elseif head === :kw && length(args)==2
-#        show_unquoted(io, args[1], indent+indent_width)
-#        print(io, '=')
-#        show_unquoted(io, args[2], indent+indent_width)
-#
-#    elseif head === :string
-#        print(io, '"')
-#        for x in args
-#            if !isa(x,AbstractString)
-#                print(io, "\$(")
-#                if isa(x,Symbol) && !(x in quoted_syms)
-#                    print(io, x)
-#                else
-#                    show_unquoted(io, x)
-#                end
-#                print(io, ")")
-#            else
-#                escape_string(io, x, "\"\$")
-#            end
-#        end
-#        print(io, '"')
-#
-#    elseif (head === :&#= || head === :$=#) && length(args) == 1
-#        print(io, head)
-#        a1 = args[1]
-#        parens = (isa(a1,Expr) && a1.head !== :tuple) || (isa(a1,Symbol) && isoperator(a1))
-#        parens && print(io, "(")
-#        show_unquoted(io, a1)
-#        parens && print(io, ")")
-#
-#    # transpose
-#    elseif (head === Symbol('\'') || head === Symbol(".'")) && length(args) == 1
-#        if isa(args[1], Symbol)
-#            show_unquoted(io, args[1])
-#        else
-#            print(io, "(")
-#            show_unquoted(io, args[1])
-#            print(io, ")")
-#        end
-#        print(io, head)
-#
-#    # `where` syntax
-#    elseif head === :where && length(args) > 1
-#        parens = 1 <= prec
-#        parens && print(io, "(")
-#        show_unquoted(io, args[1], indent, operator_precedence(:(::)))
-#        print(io, " where ")
-#        if nargs == 2
-#            show_unquoted(io, args[2], indent, 1)
-#        else
-#            print(io, "{")
-#            show_list(io, args[2:end], ", ", indent)
-#            print(io, "}")
-#        end
-#        parens && print(io, ")")
-#
-#    elseif head === :import || head === :importall || head === :using
-#        print(io, head)
-#        first = true
-#        for a = args
-#            if first
-#                print(io, ' ')
-#                first = false
-#            else
-#                print(io, '.')
-#            end
-#            if a !== :.
-#                print(io, a)
-#            end
-#        end
-#    elseif head === :meta && length(args) >= 2 && args[1] === :push_loc
-#        print(io, "# meta: location ", join(args[2:end], " "))
-#        show_type = false
-#    elseif head === :meta && length(args) == 1 && args[1] === :pop_loc
-#        print(io, "# meta: pop location")
-#        show_type = false
-#    # print anything else as "Expr(head, args...)"
-#    else
-#        show_type = false
-#        if emphstate && ex.head !== :lambda && ex.head !== :method
-#            io = IOContext(io, :TYPEEMPHASIZE => false)
-#            emphstate = false
-#        end
-#        print(io, "\$(Expr(")
-#        show(io, ex.head)
-#        for arg in args
-#            print(io, ", ")
-#            show(io, arg)
-#        end
-#        print(io, "))")
-#    end
-#    show_type && show_expr_type(io, ex.typ, emphstate)
-#    nothing
-#end
 
-function show_tuple_as_call(io::IO, dom::Vector{Node}, id::Int, name::Symbol, sig::Type)
+richprint_unquoted(io::IO, dom::Vector{Node}, sym::Symbol, ::Int, ::Int) =
+    let id = startNode(dom, io, sym, "Symbol")
+        print(io, sym)
+        endNode(dom, io, id)
+    end
+richprint_unquoted(io::IO, dom::Vector{Node}, ex::LineNumberNode, ::Int, ::Int) =
+    let id = startNode(dom, io, ex, "LineNumberNode")
+        show_linenumber(io, ex.line)
+        endNode(dom, io, id)
+    end
+richprint_unquoted(io::IO, dom::Vector{Node}, ex::LabelNode, ::Int, ::Int) =
+    let id = startNode(dom, io, ex, "LabelNode")
+        print(io, ex.label, ": ")
+        endNode(dom, io, id)
+    end
+richprint_unquoted(io::IO, dom::Vector{Node}, ex::GotoNode, ::Int, ::Int) =
+    let id = startNode(dom, io, ex, "GotoNode")
+        print(io, "goto ", ex.label)
+        endNode(dom, io, id)
+    end
+richprint_unquoted(io::IO, dom::Vector{Node}, ex::GlobalRef, ::Int, ::Int) =
+    let id = startNode(dom, io, ex, "GlobalRef")
+        print(io, ex.mod, '.', ex.name)
+        endNode(dom, io, id)
+    end
+
+function richprint_unquoted(io::IO, dom::Vector{Node}, ex::Slot, ::Int, ::Int)
+    let id = startNode(dom, io, ex, "Slot")
+        typ = isa(ex,TypedSlot) ? ex.typ : Any
+        slotid = ex.id
+        src = get(io, :SOURCEINFO, false)
+        if isa(src, CodeInfo)
+            slottypes = (src::CodeInfo).slottypes
+            if isa(slottypes, Array) && slotid <= length(slottypes::Array)
+                slottype = slottypes[slotid]
+                # The Slot in assignment can somehow have an Any type
+                if isa(slottype, Type) && isa(typ, Type) && slottype <: typ
+                    typ = slottype
+                end
+            end
+        end
+        slotnames = get(io, :SOURCE_SLOTNAMES, false)
+        if (isa(slotnames, Vector{String}) &&
+            slotid <= length(slotnames::Vector{String}))
+            print(io, (slotnames::Vector{String})[slotid])
+        else
+            print(io, "_", slotid)
+        end
+        emphstate = typeemphasize(io)
+        if emphstate || (typ !== Any && isa(ex,TypedSlot))
+            show_expr_type(io, typ, emphstate)
+        end
+        endNode(dom, io, id)
+    end
+end
+
+function richprint_unquoted(io::IO, dom::Vector{Node}, ex::QuoteNode, indent::Int, prec::Int)
+    let id = startNode(dom, io, ex, "QuoteNode")
+        if isa(ex.value, Symbol)
+            richprint_unquoted_quote_expr(io, dom, ex.value, indent, prec)
+        else
+            print(io, "\$(QuoteNode(")
+            richprint(io, dom, ex.value)
+            print(io, "))")
+        end
+        endNode(dom, io, id)
+    end
+end
+
+function richprint_unquoted_quote_expr(io::IO, dom::Vector{Node}, value, indent::Int, prec::Int)
+    if isa(value, Symbol) && !(value in quoted_syms)
+        s = string(value)
+        if isidentifier(s) || isoperator(value)
+            print(io, ":")
+            print(io, value)
+        else
+            print(io, "Symbol(", repr(s), ")")
+        end
+    else
+        if isa(value, Expr) && value.head === :block
+            richprint_block(io, dom, "quote", value, indent)
+            print(io, "end")
+        else
+            print(io, ":(")
+            richprint_unquoted(io, dom, value, indent+indent_width, -1)
+            print(io, ")")
+        end
+    end
+end
+
+function richprint_generator(io::IO, dom::Vector{Node}, ex::Expr, indent::Int)
+    if ex.head === :flatten
+        fg = ex
+        ranges = Any[]
+        while isa(fg, Expr) && fg.head === :flatten
+            push!(ranges, fg.args[1].args[2:end])
+            fg = fg.args[1].args[1]
+        end
+        push!(ranges, fg.args[2:end])
+        richprint_unquoted(io, dom, fg.args[1], indent)
+        for r in ranges
+            print(io, " for ")
+            richprint_list(io, dom, r, ", ", indent)
+        end
+    else
+        richprint_unquoted(io, dom, ex.args[1], indent)
+        print(io, " for ")
+        richprint_list(io, dom, ex.args[2:end], ", ", indent)
+    end
+end
+
+function richprint_unquoted(io::IO, dom::Vector{Node}, ex::Expr, indent::Int, prec::Int)
+    id = startNode(dom, io, ex, "Expr")
+    head, args, nargs = ex.head, ex.args, length(ex.args)
+    emphstate = typeemphasize(io)
+    show_type = true
+    if (ex.head == :(=) || ex.head == :line ||
+        ex.head == :boundscheck ||
+        ex.head == :gotoifnot ||
+        ex.head == :return)
+        show_type = false
+    end
+    if !emphstate && ex.typ === Any
+        show_type = false
+    end
+    # dot (i.e. "x.y"), but not compact broadcast exps
+    if head === :(.) && !is_expr(args[2], :tuple)
+        richprint_unquoted(io, dom, args[1], indent + indent_width)
+        print(io, '.')
+        if is_quoted(args[2])
+            richprint_unquoted(io, dom, unquoted(args[2]), indent + indent_width)
+        else
+            print(io, '(')
+            richprint_unquoted(io, dom, args[2], indent + indent_width)
+            print(io, ')')
+        end
+
+    # infix (i.e. "x <: y" or "x = y")
+    elseif (head in expr_infix_any && nargs==2) || (head === :(:) && nargs==3)
+        func_prec = operator_precedence(head)
+        head_ = head in expr_infix_wide ? " $head " : head
+        if func_prec <= prec
+            richprint_enclosed_list(io, dom, '(', args, head_, ')', indent, func_prec, true)
+        else
+            richprint_list(io, dom, args, head_, indent, func_prec, true)
+        end
+
+    # list (i.e. "(1, 2, 3)" or "[1, 2, 3]")
+    elseif haskey(expr_parens, head)               # :tuple/:vcat
+        op, cl = expr_parens[head]
+        if head === :vcat
+            sep = "; "
+        elseif head === :hcat || head === :row
+            sep = " "
+        else
+            sep = ", "
+        end
+        head !== :row && print(io, op)
+        richprint_list(io, dom, args, sep, indent)
+        if nargs == 1
+            if head === :tuple
+                print(io, ',')
+            elseif head === :vcat
+                print(io, ';')
+            end
+        end
+        head !== :row && print(io, cl)
+
+    # function call
+    elseif head === :call && nargs >= 1
+        func = args[1]
+        fname = isa(func,GlobalRef) ? func.name : func
+        func_prec = operator_precedence(fname)
+        if func_prec > 0 || fname in uni_ops
+            func = fname
+        end
+        func_args = args[2:end]
+
+        if (in(ex.args[1], (GlobalRef(Base, :bitcast), :throw)) ||
+            ismodulecall(ex))
+            show_type = false
+        end
+        if show_type
+            prec = prec_decl
+        end
+
+        # scalar multiplication (i.e. "100x")
+        if (func === :* &&
+            length(func_args)==2 && isa(func_args[1], Real) && isa(func_args[2], Symbol))
+            if func_prec <= prec
+                richprint_enclosed_list(io, dom, '(', func_args, "", ')', indent, func_prec)
+            else
+                richprint_list(io, dom, func_args, "", indent, func_prec)
+            end
+
+        # unary operator (i.e. "!z")
+        elseif isa(func,Symbol) && func in uni_ops && length(func_args) == 1
+            richprint_unquoted(io, dom, func, indent)
+            if isa(func_args[1], Expr) || func_args[1] in all_ops
+                richprint_enclosed_list(io, dom, '(', func_args, ", ", ')', indent, func_prec)
+            else
+                richprint_unquoted(io, dom, func_args[1])
+            end
+
+        # binary operator (i.e. "x + y")
+        elseif func_prec > 0 # is a binary operator
+            na = length(func_args)
+            if (na == 2 || (na > 2 && func in (:+, :++, :*))) &&
+                    all(!isa(a, Expr) || a.head !== :... for a in func_args)
+                sep = " $func "
+                if func_prec <= prec
+                    richprint_enclosed_list(io, dom, '(', func_args, sep, ')', indent, func_prec, true)
+                else
+                    richprint_list(io, dom, func_args, sep, indent, func_prec, true)
+                end
+            elseif na == 1
+                # 1-argument call to normally-binary operator
+                op, cl = expr_calls[head]
+                print(io, "(")
+                richprint_unquoted(io, dom, func, indent)
+                print(io, ")")
+                richprint_enclosed_list(io, dom, op, func_args, ", ", cl, indent)
+            else
+                richprint_call(io, dom, head, func, func_args, indent)
+            end
+
+        # normal function (i.e. "f(x,y)")
+        else
+            richprint_call(io, dom, head, func, func_args, indent)
+        end
+
+    # other call-like expressions ("A[1,2]", "T{X,Y}", "f.(X,Y)")
+    elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)
+        funcargslike = head == :(.) ? ex.args[2].args : ex.args[2:end]
+        richprint_call(io, dom, head, ex.args[1], funcargslike, indent)
+
+    # comprehensions
+    elseif head === :typed_comprehension && length(args) == 2
+        richprint_unquoted(io, dom, args[1], indent)
+        print(io, '[')
+        richprint_generator(io, dom, args[2], indent)
+        print(io, ']')
+
+    elseif head === :comprehension && length(args) == 1
+        print(io, '[')
+        richprint_generator(io, dom, args[1], indent)
+        print(io, ']')
+
+    elseif (head === :generator && length(args) >= 2) || (head === :flatten && length(args) == 1)
+        print(io, '(')
+        richprint_generator(io, dom, ex, indent)
+        print(io, ')')
+
+    elseif head === :filter && length(args) == 2
+        richprint_unquoted(io, dom, args[2], indent)
+        print(io, " if ")
+        richprint_unquoted(io, dom, args[1], indent)
+
+    # comparison (i.e. "x < y < z")
+    elseif head === :comparison && nargs >= 3 && (nargs&1==1)
+        comp_prec = minimum(operator_precedence, args[2:2:end])
+        if comp_prec <= prec
+            richprint_enclosed_list(io, dom, '(', args, " ", ')', indent, comp_prec)
+        else
+            richprint_list(io, dom, args, " ", indent, comp_prec)
+        end
+
+    # function calls need to transform the function from :call to :calldecl
+    # so that operators are printed correctly
+    elseif head === :function && nargs==2 && is_expr(args[1], :call)
+        richprint_block(io, dom, head, Expr(:calldecl, args[1].args...), args[2], indent)
+        print(io, "end")
+
+    elseif head === :function && nargs == 1
+        print(io, "function ", args[1], " end")
+
+    # block with argument
+    elseif head in (:for,:while,:function,:if) && nargs==2
+        richprint_block(io, dom, head, args[1], args[2], indent)
+        print(io, "end")
+
+    elseif head === :module && nargs==3 && isa(args[1],Bool)
+        richprint_block(io, dom, args[1] ? :module : :baremodule, args[2], args[3], indent)
+        print(io, "end")
+
+    # type declaration
+    elseif head === :type && nargs==3
+        richprint_block(io, dom, args[1] ? Symbol("mutable struct") : Symbol("struct"), args[2], args[3], indent)
+        print(io, "end")
+
+    elseif head === :bitstype && nargs == 2
+        print(io, "primitive type ")
+        richprint_list(io, dom, reverse(args), ' ', indent)
+        print(io, " end")
+
+    elseif head === :abstract && nargs == 1
+        print(io, "abstract type ")
+        richprint_list(io, dom, args, ' ', indent)
+        print(io, " end")
+
+    # empty return (i.e. "function f() return end")
+    elseif head === :return && nargs == 1 && args[1] === nothing
+        print(io, head)
+
+    # type annotation (i.e. "::Int")
+    elseif head === Symbol("::") && nargs == 1
+        print(io, "::")
+        richprint_unquoted(io, dom, args[1], indent)
+
+    # var-arg declaration or expansion
+    # (i.e. "function f(L...) end" or "f(B...)")
+    elseif head === :(...) && nargs == 1
+        richprint_unquoted(io, dom, args[1], indent)
+        print(io, "...")
+
+    elseif (nargs == 0 && head in (:break, :continue))
+        print(io, head)
+
+    elseif (nargs == 1 && head in (:return, :const)) ||
+                          head in (:local,  :global, :export)
+        print(io, head, ' ')
+        richprint_list(io, dom, args, ", ", indent)
+
+    elseif head === :macrocall && nargs >= 1
+        # Use the functional syntax unless specifically designated with prec=-1
+        if prec >= 0
+            richprint_call(io, dom, :call, ex.args[1], ex.args[2:end], indent)
+        else
+            richprint_list(io, dom, args, ' ', indent)
+        end
+
+    elseif head === :line && 1 <= nargs <= 2
+        show_linenumber(io, args...)
+
+    elseif head === :if && nargs == 3     # if/else
+        richprint_block(io, dom, "if",   args[1], args[2], indent)
+        richprint_block(io, dom, "else", args[3], indent)
+        print(io, "end")
+
+    elseif head === :try && 3 <= nargs <= 4
+        richprint_block(io, dom, "try", args[1], indent)
+        if is_expr(args[3], :block)
+            richprint_block(io, dom, "catch", args[2] === false ? Any[] : args[2], args[3], indent)
+        end
+        if nargs >= 4 && is_expr(args[4], :block)
+            richprint_block(io, dom, "finally", Any[], args[4], indent)
+        end
+        print(io, "end")
+
+    elseif head === :let && nargs >= 1
+        richprint_block(io, dom, "let", args[2:end], args[1], indent); print(io, "end")
+
+    elseif head === :block || head === :body
+        richprint_block(io, dom, "begin", ex, indent); print(io, "end")
+
+    elseif head === :quote && nargs == 1 && isa(args[1],Symbol)
+        richprint_unquoted_quote_expr(io, dom, args[1], indent, 0)
+
+    elseif head === :gotoifnot && nargs == 2
+        print(io, "unless ")
+        richprint_list(io, dom, args, " goto ", indent)
+
+    elseif head === :string && nargs == 1 && isa(args[1], AbstractString)
+        richprint(io, dom, args[1])
+
+    elseif head === :null
+        print(io, "nothing")
+
+    elseif head === :kw && length(args)==2
+        richprint_unquoted(io, dom, args[1], indent+indent_width)
+        print(io, '=')
+        richprint_unquoted(io, dom, args[2], indent+indent_width)
+
+    elseif head === :string
+        print(io, '"')
+        for x in args
+            if !isa(x,AbstractString)
+                print(io, "\$(")
+                if isa(x,Symbol) && !(x in quoted_syms)
+                    print(io, x)
+                else
+                    richprint_unquoted(io, dom, x)
+                end
+                print(io, ")")
+            else
+                escape_string(io, x, "\"\$")
+            end
+        end
+        print(io, '"')
+
+    elseif (head === :&#= || head === :$=#) && length(args) == 1
+        print(io, head)
+        a1 = args[1]
+        parens = (isa(a1,Expr) && a1.head !== :tuple) || (isa(a1,Symbol) && isoperator(a1))
+        parens && print(io, "(")
+        richprint_unquoted(io, dom, a1)
+        parens && print(io, ")")
+
+    # transpose
+    elseif (head === Symbol('\'') || head === Symbol(".'")) && length(args) == 1
+        if isa(args[1], Symbol)
+            richprint_unquoted(io, dom, args[1])
+        else
+            print(io, "(")
+            richprint_unquoted(io, dom, args[1])
+            print(io, ")")
+        end
+        print(io, head)
+
+    # `where` syntax
+    elseif head === :where && length(args) > 1
+        parens = 1 <= prec
+        parens && print(io, "(")
+        richprint_unquoted(io, dom, args[1], indent, operator_precedence(:(::)))
+        print(io, " where ")
+        if nargs == 2
+            richprint_unquoted(io, dom, args[2], indent, 1)
+        else
+            print(io, "{")
+            richprint_list(io, dom, args[2:end], ", ", indent)
+            print(io, "}")
+        end
+        parens && print(io, ")")
+
+    elseif head === :import || head === :importall || head === :using
+        print(io, head)
+        first = true
+        for a = args
+            if first
+                print(io, ' ')
+                first = false
+            else
+                print(io, '.')
+            end
+            if a !== :.
+                print(io, a)
+            end
+        end
+    elseif head === :meta && length(args) >= 2 && args[1] === :push_loc
+        print(io, "# meta: location ", join(args[2:end], " "))
+        show_type = false
+    elseif head === :meta && length(args) == 1 && args[1] === :pop_loc
+        print(io, "# meta: pop location")
+        show_type = false
+    # print anything else as "Expr(head, args...)"
+    else
+        show_type = false
+        if emphstate && ex.head !== :lambda && ex.head !== :method
+            io = IOContext(io, :TYPEEMPHASIZE => false)
+            emphstate = false
+        end
+        print(io, "\$(Expr(")
+        show(io, ex.head)
+        for arg in args
+            print(io, ", ")
+            richprint(io, dom, arg)
+        end
+        print(io, "))")
+    end
+    show_type && show_expr_type(io, ex.typ, emphstate)
+    endNode(dom, io, id)
+end
+
+import Base: unwrap_unionall
+function richprint_tuple_as_call(io::IO, dom::Vector{Node}, id::Int, name::Symbol, sig::Type)
     # print a method signature tuple for a lambda definition
     if sig === Tuple
         Base.print_with_color(color, io, name, "(...)")
