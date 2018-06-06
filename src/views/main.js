@@ -5,16 +5,26 @@ session = arguments.get("session-id")
 server = arguments.get("server")
 
 window.onload = function() {
-    var editor = CodeMirror(document.getElementById("editor"), {
-      value: "",
-      mode:  "julia",
-      lineNumbers: true,
-      lineWrapping: true,
-    })
+    var editor = document.getElementById("editor");
+    //editor.setAttribute('display', 'none')
+    //editor = CodeMirror(editor, {
+    //  value: "",
+    //  mode:  "julia",
+    //  lineNumbers: true,
+    //  lineWrapping: true,
+    //})
     var viewer = document.getElementById("viewer")
     req_response('GET', '/', '', function(res, data) {
         viewer.innerHTML = data
     })
+
+    function refresh_history() {
+        req_response('GET', '/reason', '', function(res, data) {
+            var history = document.getElementById("history")
+            history.innerText = data;
+        })
+    }
+    refresh_history()
 
     var current_highlight;
     viewer.onclick = function(evt) {
@@ -28,13 +38,14 @@ window.onload = function() {
                 return
             target = target.parentNode
         }
-        editor.getDoc().setValue("")
+        var detail = document.getElementById("detail")
+        detail.innerText = ""
         var id = target.id.substring(2, target.id.length)
         current_highlight = target
         // now style it
         current_highlight.classList.add("highlight")
         req_response('GET', `/dump/${id}`, '', function(res, data) {
-            editor.getDoc().setValue(data)
+            detail.innerText = data;
         })
         var parents = []
         while (target !== viewer) {

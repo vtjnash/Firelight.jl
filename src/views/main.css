@@ -1,16 +1,73 @@
+body > div > div {
+  grid-area: content;
+  border: 2px solid lightblue;
+  border-radius: 5px;
+  overflow-y: scroll; /* TODO: no more overflow */
+}
+body > div > div.sidebar {
+  grid-area: sidebar;
+  overflow: scroll;
+}
+body > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr 200px;
+  grid-gap: 8px;
+  grid-template-areas:
+    "content content sidebar";
+  width: 100%;
+  height: 100%;
+}
+
+#editor {
+  display: none;
+}
+
+#history {
+  padding: 8px;
+}
+
+div.pre-wrap {
+  white-space: pre-wrap;
+  font-family: monospace;
+}
+
+
 textarea.CodeMirror {
   width: 100%;
   resize: none;
 }
 
-div.CodeDisplay {
-  height: 500px;
+div.CodeDisplay { /* #viewer */
   overflow: scroll;
-  white-space: nowrap;
+  /* white-space: nowrap; */
+  white-space: pre-wrap;
+  font-family: monospace;
+  background-color: #272732;
+  color: white;
+  height: 400px;
+  padding: 8px;
 }
 
+#dom-tree {
+  height: 20px;
+  border: 1px solid lightblue;
+}
+
+#dom-tree > span {
+  margin: 0px 4px;
+  padding: 0px 2px;
+  border: solid darkblue;
+  border-width: 0px 1px;
+}
+
+#detail {
+  overflow: scroll;
+  padding: 8px;
+}
+
+
 span.highlight {
-    font-weight: bold;
+  font-weight: bold;
 }
 
 span.CodeInfo,
@@ -20,17 +77,17 @@ span.ProfileTree,
 span.ProfileTree span.level,
 span.ProfileTree span.frame,
 span.ProfileTree span.frame-c {
-    display: block;
+  display: block;
 }
 
 span.CodeInfo > .ExprNode {
-    white-space: pre;
+  white-space: pre;
 }
 
 span.ProfileTree span.level {
-    margin-left: 8px;
+  margin-left: 8px;
 }
 
 span.ProfileTree span.frame-c {
-    color: aaaaaa;
+  color: aaaaaa;
 }
