@@ -1,7 +1,7 @@
 __precompile__()
 module Firelight
 
-# using Sockets
+using Sockets
 using Electron
 using Electron: URI_file
 import HTTP

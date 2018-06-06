@@ -1,0 +1,9 @@
+name = "Firelight"
+uuid = "5155c854-65b0-11e8-3a1e-d5d122032aea"
+
+[deps]
+Electron = "a1bb12fb-d4d1-54b4-b10a-ee7951ef7ad3"
+HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+Profile = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
+Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
