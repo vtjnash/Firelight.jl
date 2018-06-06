@@ -126,14 +126,22 @@ function render(req::HTTP.Request, session::ServerState)
         session = start_session()
         keystr = hex(session.key, 16)
         rep.body = keystr
-    elseif target == "/history"
+    elseif target == "/reason"
         rep.body = session.reason
+    elseif ismatch(r"/select/(\d+)", target)
+        id = tryparse(Int, match(r"/select/(\d+)", target)[1])
+        if id === nothing || id < 1 || id > length(session.shadowdom)
+            return HTTP.Response(404, "Id not found in shadowdom")
+        end
+        o = session.shadowdom[id].object
+        Core.eval(Main, Expr(:block, Expr(:(=), :sel, QuoteNode(o)), Expr(:return, nothing)))
     elseif ismatch(r"/dump/(\d+)", target)
         id = tryparse(Int, match(r"/dump/(\d+)", target)[1])
         if id === nothing || id < 1 || id > length(session.shadowdom)
             return HTTP.Response(404, "Id not found in shadowdom")
         end
-        rep.body = sprint(session.shadowdom[id].object) do io, r
+        o = session.shadowdom[id].object
+        rep.body = sprint(o) do io, r
             dump(io, r, maxdepth=1)
         end
     else

@@ -44,6 +44,7 @@ window.onload = function() {
         current_highlight = target
         // now style it
         current_highlight.classList.add("highlight")
+        req_response('GET', `/select/${id}`, '', function(res, data) {})
         req_response('GET', `/dump/${id}`, '', function(res, data) {
             detail.innerText = data;
         })
