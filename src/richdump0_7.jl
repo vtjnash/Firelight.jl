@@ -2,26 +2,7 @@ import Base: undef_ref_str
 
 const dump_indent = "    "
 
-function richdump(io::IOContext, dom::Vector{Node}, x::Core.SimpleVector)
-    let id = startNode(dom, io, x, "SimpleVector")
-        if isempty(x)
-            print(io, "empty SimpleVector")
-        else
-            print(io, "SimpleVector")
-            for i = 1:length(x)
-                println(io)
-                nextChild(dom, io, id)
-                print(io, dump_indent, i, ": ")
-                if isassigned(x, i)
-                    richprint(io, dom, x[i])
-                else
-                    print(io, undef_ref_str)
-                end
-            end
-        end
-        endNode(dom, io, id)
-    end
-end
+richdump(io::IO, dom::Vector{Node}, @nospecialize(x)) = richdump(IOContext(io), dom, x)
 
 function richdump(io::IOContext, dom::Vector{Node}, @nospecialize(x))
     let id = startNode(dom, io, x, "")
@@ -55,6 +36,27 @@ function richdump(io::IOContext, dom::Vector{Node}, @nospecialize(x))
     end
 end
 
+function richdump(io::IOContext, dom::Vector{Node}, x::Core.SimpleVector)
+    let id = startNode(dom, io, x, "SimpleVector")
+        if isempty(x)
+            print(io, "empty SimpleVector")
+        else
+            print(io, "SimpleVector")
+            for i = 1:length(x)
+                println(io)
+                nextChild(dom, io, id)
+                print(io, dump_indent, i, ": ")
+                if isassigned(x, i)
+                    richprint(io, dom, x[i])
+                else
+                    print(io, undef_ref_str)
+                end
+            end
+        end
+        endNode(dom, io, id)
+    end
+end
+
 richdump(io::IOContext, dom::Vector{Node}, x::Module) =
     let id = startNode(dom, io, x, "Module")
         print(io, "Module ", x)
@@ -73,7 +75,7 @@ richdump(io::IOContext, dom::Vector{Node}, x::Symbol) =
     end
 richdump(io::IOContext, dom::Vector{Node}, x::Ptr) =
     let id = startNode(dom, io, x, "Ptr")
-        print(io, x)
+        print(io, x) # this avoids print the type twice
         endNode(dom, io, id)
     end
 
@@ -94,12 +96,12 @@ function richdump(io::IOContext, dom::Vector{Node}, x::Array{T}) where {T}
     let id = startNode(dom, io, x, "Array")
         print(io, "Array{")
         richprint(io, dom, T)
-        print("}(", string(size(x)), ")")
+        print(io, "}(", string(size(x)), ")")
         if isprimitivetype(T) # was T <: Number
             print(io, " ")
             richprint(io, dom, x)
         else
-            if !isempty(x) && !show_circular(io, x)
+            if !isempty(x) && !Base.show_circular(io, x)
                 recur_io = IOContext(io, :SHOWN_SET => x)
                 lx = length(x)
                 if get(io, :limit, false) && lx > 10
@@ -121,7 +123,8 @@ function richdump(io::IOContext, dom::Vector{Node}, x::DataType)
     let id = startNode(dom, io, x, "DataType")
         richprint(io, dom, x)
         if x !== Any
-            print(io, " <: ", supertype(x))
+            print(io, " <: ")
+            richprint(io, dom, supertype(x))
         end
         if !(x <: Tuple) && !x.abstract
             tvar_io::IOContext = io
@@ -176,8 +179,3 @@ function richdump(io::IOContext, dom::Vector{Node}, x::Union)
         endNode(dom, io, id)
     end
 end
-
-
-#richdump(io::IOContext, dom::Vector{Node}, x::typeof(Union{}))
-
-richdump(io::IO, dom::Vector{Node}, @nospecialize(x)) = richdump(IOContext(io), dom, x)

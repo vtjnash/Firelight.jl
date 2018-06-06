@@ -33,14 +33,16 @@ application() = Electron.default_application()
 
 function escapehtml(io::IO, bytes::AbstractVector{UInt8}, attribute::Bool=true)
     for b in bytes
-        if b == UInt8('&')
+        if b < 0x20
+            write(io, "&#$b;")
+        elseif b == UInt8('&')
             write(io, "&amp;")
         elseif b == UInt8('<')
             write(io, "&lt;")
         elseif b == UInt8('>')
             write(io, "&gt;")
         elseif attribute && b == UInt8('\'')
-            write(io, "&#39;")
+            write(io, "&apos;") # for html4, use #39
         elseif attribute && b == UInt8('"')
             write(io, "&quot;")
         else
