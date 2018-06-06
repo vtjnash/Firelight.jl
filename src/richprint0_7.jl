@@ -1,6 +1,6 @@
-richprint(io::IO, dom::Vector{Node}, x::ANY) = richprint_default(io, dom, x)
+richprint(io::IO, dom::Vector{Node}, @nospecialize(x)) = richprint_default(io, dom, x)
 
-function richprint_default(io::IO, dom::Vector{Node}, x::ANY)
+function richprint_default(io::IO, dom::Vector{Node}, @nospecialize(x))
     t = typeof(x)
     isbits(t) && Base.show_circular(io, x) && return
     let id = startNode(dom, io, x, "")
@@ -34,4 +34,3 @@ function richprint_default(io::IO, dom::Vector{Node}, x::ANY)
         endNode(dom, io, id)
     end
 end
-

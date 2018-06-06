@@ -6,7 +6,7 @@ using Profile: StackFrameTree, LineInfoDict, LineInfoFlatDict, StackFrame
 
 function tree_format(io::IO, dom::Vector{Node}, frame::StackFrameTree)
     li = frame.frame
-    let id = startNode(dom, io, li, li.from_c ? "frame-c": "frame")
+    let id = startNode(dom, io, li, li.from_c ? "frame-c" : "frame")
         print(io, frame.count)
         print(io, ' ')
         show(io, li; full_path = true)

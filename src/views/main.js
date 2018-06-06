@@ -21,7 +21,7 @@ window.onload = function() {
     function refresh_history() {
         req_response('GET', '/reason', '', function(res, data) {
             var history = document.getElementById("history")
-            history.innerText = data;
+            history.innerHTML = `<ol><li>${data}</li></ol>`
         })
     }
     refresh_history()
