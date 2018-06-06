@@ -2,9 +2,23 @@ __precompile__()
 module Firelight
 
 using Electron
+using Electron: URI_file
 import HTTP
 import JSON
 # import FunctionalCollections
+
+"""
+    @LOCAL(filespec)
+
+Construct an absolute URI to `filespec` relative to the source file containing the macro call.
+"""
+macro LOCAL(filespec)
+    # v0.7: base = String(__source__.file)
+    #       filespec isa String && return URI_file(base, filespec) # can construct eagerly
+    #       return :(URI_file($base, $(esc(filespec))))
+    return :(URI_file(@__DIR__, $(esc(filespec))))
+end
+
 
 application() = Electron.default_application()
 #let app
@@ -42,9 +56,10 @@ mutable struct ServerState
     key::UInt64
     content::String
     shadowdom::Vector{Node}
+    reason::String
     exists::Bool
-    function ServerState(key::UInt64)
-        state = new(key, "", Vector{Node}(), true)
+    function ServerState(key::UInt64, reason::String)
+        state = new(key, "", Vector{Node}(), reason, true)
         sessions[key] = state
         return state
     end
@@ -64,8 +79,7 @@ function start_server()
     let server = listen(server_name)
         @schedule HTTP.listen(server_name, tcpref=Ref(server)) do request::HTTP.Request
             key = tryparse(UInt64, HTTP.header(request, "Session-id", ""), 16)
-            isnull(key) && return HTTP.Response(400, "Session-id header missing")
-            key = get(key)
+            key === nothing && return HTTP.Response(400, "Session-id header missing")
             session = get(sessions, key, nothing)
             session === nothing && return HTTP.Response(410, "Session non-existant")
             return invokelatest(render, request, session)
@@ -83,7 +97,7 @@ function start_session()
     while haskey(sessions, key)
         key += 1
     end
-    session = ServerState(key)
+    session = ServerState(key, "ans")
     return session
 end
 
@@ -111,13 +125,16 @@ function render(req::HTTP.Request, session::ServerState)
         session = start_session()
         keystr = hex(session.key, 16)
         rep.body = keystr
+    elseif target == "/history"
+        rep.body = session.reason
     elseif ismatch(r"/dump/(\d+)", target)
         id = tryparse(Int, match(r"/dump/(\d+)", target)[1])
-        id = isnull(id) ? nothing : get(id)
         if id === nothing || id < 1 || id > length(session.shadowdom)
             return HTTP.Response(404, "Id not found in shadowdom")
         end
-        rep.body = sprint(dump, session.shadowdom[id].object)
+        rep.body = sprint(session.shadowdom[id].object) do io, r
+            dump(io, r, maxdepth=1)
+        end
     else
         return HTTP.Response(404)
     end

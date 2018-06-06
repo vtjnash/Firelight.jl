@@ -41,7 +41,7 @@ end
 function annotate!(out::AbstractVector{UInt8}, dom::Vector{Node})
     io = IOBuffer()
     prevstart = 0
-    stack = []
+    stack = Node[]
     push!(dom, DELETED)
     for (id, node) in enumerate(dom)
         next = node.start
@@ -68,5 +68,5 @@ function annotate!(out::AbstractVector{UInt8}, dom::Vector{Node})
     return (String(take!(io)), dom)
 end
 
-include("richprint.jl")
+include("richprint$(VERSION.major)_$(VERSION.minor).jl")
 include("richprofile.jl")

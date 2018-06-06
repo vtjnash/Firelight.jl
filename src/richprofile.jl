@@ -1,67 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module Profile1
-
-import Base.Profile
-import .Profile: btskip, UNKNOWN, StackFrame
-
-const LineInfoDict = Dict{UInt64, Vector{StackFrame}}
-const LineInfoFlatDict = Dict{UInt64, StackFrame}
-
-# Construct a prefix trie of backtrace counts
-mutable struct StackFrameTree{T} # where T <: Union{UInt64, StackFrame}
-    frame::StackFrame
-    count::Int
-    down::Dict{T, StackFrameTree{T}}
-    StackFrameTree{T}(frame::StackFrame) where {T} = new(frame, 0, Dict{T, StackFrameTree{T}}())
-end
-
-
-# turn a list of backtraces into a tree (implicitly separated by NULL markers)
-function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::LineInfoFlatDict) where {T}
-    toskip = btskip
-    parent = root
-    for ip in reverse(all)
-        if ip == 0
-            toskip = btskip
-            parent = root
-            parent.count += 1
-        elseif toskip > 0
-            toskip -= 1
-        else
-            let frame = lidict[ip]
-                key = (T === UInt64 ? ip : frame)
-                parent = get!(parent.down, key) do
-                    return StackFrameTree{T}(frame)
-                end
-                parent.count += 1
-            end
-        end
-    end
-    return root
-end
-
-# Order alphabetically (file, function) and then by line number
-function liperm(lilist::Vector{StackFrame})
-    function lt(a::StackFrame, b::StackFrame)
-        a == UNKNOWN && return false
-        b == UNKNOWN && return true
-        fcmp = cmp(a.file, b.file)
-        fcmp < 0 && return true
-        fcmp > 0 && return false
-        fcmp = cmp(a.func, b.func)
-        fcmp < 0 && return true
-        fcmp > 0 && return false
-        fcmp = cmp(a.line, b.line)
-        fcmp < 0 && return true
-        return false
-    end
-    return sortperm(lilist, lt = lt)
-end
-
-end # module
-
-using .Profile1: StackFrameTree, LineInfoDict, LineInfoFlatDict
+#const Profile1 = Base.root_module(Base.PkgId(Base.UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile"))
+using Profile
+using Profile: StackFrameTree, LineInfoDict, LineInfoFlatDict, StackFrame
 
 function tree_format(io::IO, dom::Vector{Node}, frame::StackFrameTree)
     li = frame.frame
@@ -109,18 +50,25 @@ function tree(io::IO, dom::Vector{Node}, bt::StackFrameTree)
     end
 end
 
+function drop_shadow!(node::StackFrameTree)
+    empty!(node.builder_key)
+    empty!(node.builder_value)
+    foreach(drop_shadow!, values(node.down))
+    nothing
+end
+
 function tree(io::IO, dom::Vector{Node}, data::Vector{UInt64}, lidict::LineInfoFlatDict)
     combine = true
     if combine
-        root = Profile1.tree!(StackFrameTree{StackFrame}(Profile.UNKNOWN), data, lidict)
+        root = Profile1.tree!(StackFrameTree{StackFrame}(), data, lidict, true)
     else
-        root = Profile1.tree!(StackFrameTree{UInt64}(Profile.UNKNOWN), data, lidict)
+        root = Profile1.tree!(StackFrameTree{UInt64}(), data, lidict, true)
     end
+    drop_shadow!(root)
     let id = startNode(dom, io, root, "ProfileTree")
         tree(io, dom, root)
         endNode(dom, io, id)
     end
-    nothing
 end
 
 function tree(io::IO, dom::Vector{Node}, data::Vector{UInt64}, lidict::LineInfoDict)

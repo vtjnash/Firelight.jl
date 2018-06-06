@@ -1,0 +1,6 @@
+{
+  "name": "firelight-views",
+  "dependencies": {
+    "codemirror": "^5.38.0"
+  }
+}
