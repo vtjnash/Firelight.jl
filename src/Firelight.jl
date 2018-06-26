@@ -108,7 +108,7 @@ function start_session(server_name::String)
     app = application()
     session = start_session()
     keystr = hex(session.key, 16)
-    w = Window(app, @LOCAL("views/main.html?session-id=$keystr&server=$(HTTP.escapeuri(server_name))"))
+    w = Window(app, Electron.@LOCAL("views/main.html?session-id=$keystr&server=$(HTTP.escapeuri(server_name))"))
     return session
 end
 
